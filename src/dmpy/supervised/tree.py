@@ -32,7 +32,6 @@ from collections import Counter
 import matplotlib.pyplot as plt
 
 
-
 __all__ = [
     'decision_tree_learner',
     ]
