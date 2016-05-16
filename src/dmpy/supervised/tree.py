@@ -32,6 +32,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 
 
+
 __all__ = [
     'decision_tree_learner',
     ]
@@ -46,12 +47,10 @@ class Node(object):
     def __init__(self, key):
         self.col     = key
         self.child   = np.array([],dtype = Node)
-        #self.kind    = np.array([])
         self.Ci      = None 
     def add_child(self,child,kind):
         child.kind  = kind
         self.child    = np.insert(self.child , len(self.child),child)
-        #self.kind  = np.insert(self.kind  , len(self.kind) ,kind)
         
 def _split_ID3(D , L):
     '''
@@ -217,7 +216,6 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
                 depth= depth +1        
             _print_tree(child ,ax,width_offset,depth_offset,list_name,ci_name,depth,width,location)
             width[depth-1]= width[depth-1]+1
-
 
 def _tree_w_d(tree,d,width,depth):
     '''
