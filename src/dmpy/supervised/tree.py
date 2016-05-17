@@ -51,13 +51,131 @@ class Node(object):
     def add_child(self,child,kind):
         child.kind  = kind
         self.child    = np.insert(self.child , len(self.child),child)
+
         
+def _info_D(L):
+    '''     
+       计算数据集信息熵  
+     L  【一维数组】 存放类标L
+    '''    
+    info_D   = 0.0
+    #   class下每个种类ci的个数【dict】
+    kind_of_cis_count = Counter(L.tolist())
+    kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
+    
+    # class下有多少种类ci【list】
+    kind_of_cis= kind_of_cis_count.keys()
+    for kind_of_ci in kind_of_cis:               
+        info_D = info_D  + (-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
+    return info_D
+
+def _info_col_D(cur_col,L):
+    '''     
+       计算列的信息熵  
+       cur_col     
+       L          【一维数组】 存放类标L
+       cur_col    【list】    存放一列
+    '''    
+    assert len(cur_col) == len(L)
+    
+    info_col_D = 0.0    
+    rows = len(cur_col)
+    # col下每个种类values的个数【dict】
+    kind_of_values_count = Counter(cur_col)
+    # col下有多少种类values【list】
+    kind_of_values= kind_of_values_count.keys()
+    for kind_of_value in kind_of_values :
+        #  value对应的key 
+        keys= [key for key,value in enumerate(cur_col) if value == kind_of_value]
+        #  key对应的class  
+        Class =  [L[i] for i in keys]
+        #  class下每个种类ci的个数【dict】
+        kind_of_cis_count = Counter(Class)
+        kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
+        # class下有多少种类ci【list】
+        kind_of_cis= kind_of_cis_count.keys()
+           #  逐项计算累加
+        info_col_D_tmp = .0
+        for kind_of_ci in kind_of_cis:               
+            info_col_D_tmp = info_col_D_tmp  +(-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
+            
+        kovc_div_row = kind_of_values_count[kind_of_value]/float(rows)
+        info_col_D = info_col_D + kovc_div_row * info_col_D_tmp
+    return info_col_D
+
+def _split_info_col_D(cur_col,L):
+    '''     
+       计算列的分裂信息  
+       cur_col     
+       L          【一维数组】 存放类标L
+       cur_col    【list】    存放一列
+    '''    
+    assert len(cur_col) == len(L)
+    
+    info_col_D = 0.0    
+    rows = len(cur_col)
+    # col下每个种类values的个数【dict】
+    kind_of_values_count = Counter(cur_col)
+    # col下有多少种类values【list】
+    kind_of_values= kind_of_values_count.keys()
+    for kind_of_value in kind_of_values :
+        #  value对应的key 
+        keys= [key for key,value in enumerate(cur_col) if value == kind_of_value]
+        #  key对应的class  
+        Class =  [L[i] for i in keys]
+        #  class下每个种类ci的个数【dict】
+        kind_of_cis_count = Counter(Class)
+        kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
+        # class下有多少种类ci【list】
+        kind_of_cis= kind_of_cis_count.keys()
+           #  逐项计算累加
+        info_col_D_tmp = .0
+        for kind_of_ci in kind_of_cis:               
+            info_col_D_tmp = info_col_D_tmp  +(-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
+            
+        kovc_div_row = kind_of_values_count[kind_of_value]/float(rows)
+        info_col_D = info_col_D + kovc_div_row * info_col_D_tmp
+    return info_col_D
+
+
+
+def _split_C45(D , L):
+    '''
+     D  【二维数组】 存放记录D      
+     L  【一维数组】 存放类标L
+    '''    
+    #   最大信息增益
+    max_gain =  float('-Inf')  
+    #   数据集的信息熵
+    info_D   = 0.0
+    #   最好的分裂属性  
+    best_col = None
+    
+
+    #   计算数据集信息熵  
+    info_D =   _info_D(L)      
+    #  计算所有列的信息熵，      
+    rows,cols = D.shape
+    for col in range(cols) :
+          #  当前列
+        cur_col = D[:,col]
+          #  当前列的分裂信息
+        split_info_col_D   = _split_info_col_D(cur_col,L)
+          #  当前列的信息熵
+        info_col_D         = _info_col_D(cur_col,L)
+        
+          # 获得最大的信息增益
+        if  info_D - info_col_D >  max_gain :
+            max_gain = info_D - info_col_D
+            best_col = col        
+            
+    return  best_col
+
 def _split_ID3(D , L):
     '''
      D  【二维数组】 存放记录D      
      L  【一维数组】 存放类标L
-    '''
-    
+    '''    
     #   最大信息增益
     max_gain =  float('-Inf')  
     #   数据集的信息熵
@@ -65,6 +183,7 @@ def _split_ID3(D , L):
     #  最好的分裂属性  
     best_col = None
     
+    '''
     #   计算数据集信息熵  
     #   class下每个种类ci的个数【dict】
     kind_of_cis_count = Counter(L.tolist())
@@ -74,14 +193,18 @@ def _split_ID3(D , L):
     kind_of_cis= kind_of_cis_count.keys()
     for kind_of_ci in kind_of_cis:               
         info_D = info_D  + (-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
-          
+    '''
+    info_D =   _info_D(L)
+    
+    
     #  计算所有列的信息熵，      
     rows,cols = D.shape
     for col in range(cols) :
-            #当前列的信息熵
-        info_col_D = 0.0        
+          #当前列的信息熵
         cur_col = D[:,col]
+        info_col_D = _info_col_D(cur_col,L)
         
+        '''
         # col下每个种类values的个数【dict】
         kind_of_values_count = Counter(cur_col)
         # col下有多少种类values【list】
@@ -104,11 +227,12 @@ def _split_ID3(D , L):
             #  kind_of_values_count = kovc
             kovc_div_row = kind_of_values_count[kind_of_value]/float(rows)
             info_col_D = info_col_D + kovc_div_row * info_col_D_tmp
-            
+          '''
             # 获得最大的信息增益
         if  info_D - info_col_D >  max_gain :
             max_gain = info_D - info_col_D
             best_col = col        
+            
     return  best_col
 
 def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
@@ -290,4 +414,4 @@ class decision_tree_learner(object):
         _print_tree(root,ax,width_offset,depth_offset,list_name,ci_name,1,width,[0,0])  
            # 保存成图片
         plt.show()  
-        plt.savefig('/test.png', dpi=120)
+        plt.savefig('/root/workspace/DMPY/src/test.png', dpi=120)
