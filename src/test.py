@@ -21,7 +21,7 @@ def load(force_contiguous=True):
 if __name__ == '__main__' or __name__ == 'test_tree':
     print __name__
     
-    C = dmpy.supervised.tree.decision_tree_learner()
+    C = dmpy.supervised.tree.decision_tree_learner('CART')
     D, L = load()
     root = C.train_tree(D, L)
     print C.tree_w_d(root)

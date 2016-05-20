@@ -30,6 +30,7 @@ import numpy as np
 import scipy as sp
 from collections import Counter
 import matplotlib.pyplot as plt
+import itertools
 
 
 
@@ -51,8 +52,7 @@ class Node(object):
     def add_child(self,child,kind):
         child.kind  = kind
         self.child    = np.insert(self.child , len(self.child),child)
-
-        
+       
 def _info_D(L):
     '''     
        计算数据集信息熵  
@@ -68,6 +68,24 @@ def _info_D(L):
     for kind_of_ci in kind_of_cis:               
         info_D = info_D  + (-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
     return info_D
+
+def _gini_D(L):
+    '''     
+       计算数据集的基尼指数
+     L  【一维数组】 存放类标L
+    '''    
+    gini_D   = 0.0
+    #   class下每个种类ci的个数【dict】
+    kind_of_cis_count = Counter(L.tolist())
+    kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
+    
+    # class下有多少种类ci【list】
+    kind_of_cis= kind_of_cis_count.keys()
+    for kind_of_ci in kind_of_cis:       
+        gini_D = gini_D  + sp.power(float(kind_of_cis_count[kind_of_ci])/kind_of_ci_count_sum,2)
+        
+    gini_D = 1 - gini_D
+    return gini_D
 
 def _info_col_D(cur_col,L):
     '''     
@@ -103,55 +121,102 @@ def _info_col_D(cur_col,L):
         info_col_D = info_col_D + kovc_div_row * info_col_D_tmp
     return info_col_D
 
-def _split_info_col_D(cur_col,L):
+def _split_info_col_D(cur_col,L,Len_D):
     '''     
        计算列的分裂信息  
+       cur_col     
+       L          【一维数组】 存放类标L
+       cur_col    【list】    存放一列
+       Len_D       [int]     训练集元组的个数
+    '''    
+    assert len(cur_col) == len(L)
+    
+    split_info_col_D = 0.0    
+    rows = len(cur_col)
+    # col下每个种类values的个数【dict】
+    kind_of_values_count = Counter(cur_col)
+    # col下有多少种类values【list】
+    kind_of_values= kind_of_values_count.keys()
+    absolute_D = abs(Len_D)
+    for kind_of_value in kind_of_values :
+        # kind下包含value的个数
+        absolute_Dj = abs(kind_of_values_count[kind_of_value])
+        split_info_col_D = split_info_col_D+( float(absolute_Dj)/absolute_D * sp.log2(float(absolute_Dj)/absolute_D))
+    split_info_col_D *= -1  
+    return split_info_col_D
+
+def _gini_col_D(cur_col,L):
+    '''     
+       计算列的基尼指数  
        cur_col     
        L          【一维数组】 存放类标L
        cur_col    【list】    存放一列
     '''    
     assert len(cur_col) == len(L)
     
-    info_col_D = 0.0    
-    rows = len(cur_col)
+    gini_col_D = float('Inf')  
+    
     # col下每个种类values的个数【dict】
     kind_of_values_count = Counter(cur_col)
+    kind_of_values_count_sum = sum([kind_of_value_count[1]for kind_of_value_count in kind_of_values_count.items()])
+    abs_D  = kind_of_values_count_sum
+    
     # col下有多少种类values【list】
     kind_of_values= kind_of_values_count.keys()
-    for kind_of_value in kind_of_values :
-        #  value对应的key 
-        keys= [key for key,value in enumerate(cur_col) if value == kind_of_value]
-        #  key对应的class  
-        Class =  [L[i] for i in keys]
-        #  class下每个种类ci的个数【dict】
-        kind_of_cis_count = Counter(Class)
-        kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
-        # class下有多少种类ci【list】
-        kind_of_cis= kind_of_cis_count.keys()
-           #  逐项计算累加
-        info_col_D_tmp = .0
-        for kind_of_ci in kind_of_cis:               
-            info_col_D_tmp = info_col_D_tmp  +(-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
+
+     #  二元划分集合
+    two_partition_set = [] 
+    two_partition_set_count  = (sp.power(len(kind_of_values), 2)-2)/2
+    for kind_of_value in range(1,len(kind_of_values)+1):
+        iter = itertools.combinations(kind_of_values,kind_of_value)
+        two_partition_set+=list(iter)
+        if(len(two_partition_set) >= two_partition_set_count):
+            break ;
+        
+    if two_partition_set_count == 1 :
+        two_partition_set = two_partition_set[0]
+        
+    assert len(two_partition_set) == two_partition_set_count
+    
+     #  在二元划分集合找到最小的分裂子集
+    for a_two_partition_set in two_partition_set:
+         Class  = []
+         keys   = []
+         
+         abs_D1 = 0
+         for a_tup in a_two_partition_set:
+             abs_D1 +=  abs(kind_of_values_count[a_tup])
+             #  value对应的key 
+             keys= [key for key,value in enumerate(cur_col) if value == a_tup]
+             #  key对应的class  
+             Class =  [L[i] for i in keys]
+         gini_D1 = _gini_D(np.array(Class))
+         D1_DIV_D_MULTI_GINID1 = float(abs_D1)/abs_D*gini_D1
+         
+         abs_D2 = abs_D - abs_D1
+         Class = [L[i] for i in list(set(range(0,kind_of_values_count_sum))-set(keys))]
+         gini_D2 = _gini_D(np.array(Class))
+         D2_DIV_D_MULTI_GINID2 = float(abs_D2)/abs_D*gini_D2
+         
+         if gini_col_D > D1_DIV_D_MULTI_GINID1 + D2_DIV_D_MULTI_GINID2:
+            gini_col_D = D1_DIV_D_MULTI_GINID1 + D2_DIV_D_MULTI_GINID2
             
-        kovc_div_row = kind_of_values_count[kind_of_value]/float(rows)
-        info_col_D = info_col_D + kovc_div_row * info_col_D_tmp
-    return info_col_D
+    return gini_col_D
+     
 
-
-
-def _split_C45(D , L):
+def _split_C45(D , L , Len_D):
     '''
-     D  【二维数组】 存放记录D      
-     L  【一维数组】 存放类标L
+     D          【二维数组】 存放记录D      
+     L          【一维数组】 存放类标L
+     Len_D       [int]     训练集元组的个数
     '''    
-    #   最大信息增益
-    max_gain =  float('-Inf')  
+    #   最大增益率
+    max_gain_rate =  float('-Inf')  
     #   数据集的信息熵
     info_D   = 0.0
     #   最好的分裂属性  
     best_col = None
     
-
     #   计算数据集信息熵  
     info_D =   _info_D(L)      
     #  计算所有列的信息熵，      
@@ -160,13 +225,17 @@ def _split_C45(D , L):
           #  当前列
         cur_col = D[:,col]
           #  当前列的分裂信息
-        split_info_col_D   = _split_info_col_D(cur_col,L)
+        split_info_col_D   = _split_info_col_D(cur_col,L,Len_D)
           #  当前列的信息熵
         info_col_D         = _info_col_D(cur_col,L)
+          #  当前列的信息增益
+        gain_col_D         = info_D - info_col_D
+          #   当前列的增益率
+        gain_rate_col_D    = gain_col_D / split_info_col_D
         
           # 获得最大的信息增益
-        if  info_D - info_col_D >  max_gain :
-            max_gain = info_D - info_col_D
+        if  gain_rate_col_D >  max_gain_rate :
+            max_gain_rate = gain_rate_col_D
             best_col = col        
             
     return  best_col
@@ -183,58 +252,48 @@ def _split_ID3(D , L):
     #  最好的分裂属性  
     best_col = None
     
-    '''
-    #   计算数据集信息熵  
-    #   class下每个种类ci的个数【dict】
-    kind_of_cis_count = Counter(L.tolist())
-    kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
-    
-    # class下有多少种类ci【list】
-    kind_of_cis= kind_of_cis_count.keys()
-    for kind_of_ci in kind_of_cis:               
-        info_D = info_D  + (-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
-    '''
+    # 计算数据集信息熵  
     info_D =   _info_D(L)
     
     
     #  计算所有列的信息熵，      
     rows,cols = D.shape
     for col in range(cols) :
-          #当前列的信息熵
+          # 当前列的信息熵
         cur_col = D[:,col]
         info_col_D = _info_col_D(cur_col,L)
-        
-        '''
-        # col下每个种类values的个数【dict】
-        kind_of_values_count = Counter(cur_col)
-        # col下有多少种类values【list】
-        kind_of_values= kind_of_values_count.keys()
-        for kind_of_value in kind_of_values :
-            #  value对应的key 
-            keys= [key for key,value in enumerate(cur_col) if value == kind_of_value]
-            #  key对应的class  
-            Class =  [L[i] for i in keys]
-            #  class下每个种类ci的个数【dict】
-            kind_of_cis_count = Counter(Class)
-            kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
-            # class下有多少种类ci【list】
-            kind_of_cis= kind_of_cis_count.keys()
-                #  逐项计算累加
-            info_col_D_tmp = .0
-            for kind_of_ci in kind_of_cis:               
-                info_col_D_tmp = info_col_D_tmp  +(-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
-            
-            #  kind_of_values_count = kovc
-            kovc_div_row = kind_of_values_count[kind_of_value]/float(rows)
-            info_col_D = info_col_D + kovc_div_row * info_col_D_tmp
-          '''
-            # 获得最大的信息增益
+          # 获得最大的信息增益
         if  info_D - info_col_D >  max_gain :
             max_gain = info_D - info_col_D
-            best_col = col        
-            
+            best_col = col          
     return  best_col
 
+def _split_GINI(D , L):
+     '''
+     D  【二维数组】 存放记录D      
+     L  【一维数组】 存放类标L
+    '''    
+     #   最大信息增益
+     max_gini =  float('-Inf')  
+     #   数据集的信息熵
+     gini_D   = 0.0
+     #  最好的分裂属性  
+     best_col = None
+     # 计算数据集信息熵  
+     gini_D =   _gini_D(L)
+     
+     #  计算所有列的基尼指数，      
+     rows,cols = D.shape
+     for col in range(cols) :
+           # 当前列的基尼指数
+        cur_col = D[:,col]
+        gini_col_D = _gini_col_D(cur_col,L)
+           # 获得最大的信息增益
+        if  gini_D - gini_col_D >  max_gini :
+            max_gini = gini_D - gini_col_D
+            best_col = col          
+     return  best_col
+    
 def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
     '''
      D                 【二维数组】 存放记录      
@@ -268,8 +327,13 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
         
     #  找出最好的分裂属性
     best_col  = None
-    if criterion == 'ID3' :
+    if criterion   == 'ID3' :
         best_col  = _split_ID3(D, L) 
+    elif criterion == 'C45' :
+        best_col  = _split_C45(D, L ,len(D)) 
+    elif criterion == 'CART' :
+        best_col  = _split_GINI(D, L) 
+        
         
     #  用最好的分裂属性标记节点N
     N.col  = best_col
@@ -360,12 +424,13 @@ def _tree_w_d(tree,d,width,depth):
         width[d-1]= width[d-1]+1
         
 class decision_tree_learner(object):
-    '''
-    criterion           【string】属性选择划分的度量 默认是ID3（信息增益）
-    min_split           【int】        停止分裂的数据集记录数
-    multiple_branch     【bool】     是否多路划分
-    '''
+
     def __init__(self,criterion='ID3', min_split=4,multiple_branch=True):
+        '''
+         criterion           【string】属性选择划分的度量 默认是ID3（信息增益）
+         min_split           【int】        停止分裂的数据集记录数
+         multiple_branch     【bool】     是否多路划分
+        '''     
         self.criterion       = criterion
         self.min_split       = min_split
         self.multiple_branch = multiple_branch    
@@ -374,23 +439,29 @@ class decision_tree_learner(object):
            #  当前决策树的宽度
         self.width           = [0]
         
-    '''
-    D    【二维数组】 存放记录      
-    L    【一维数组】 存放类标志ci（i=1..n）        
-    criterion 【函数指针】 属性选择划分的度量
-    '''
+
     def train_tree(self,D, L, weights=None):
+        '''
+        D    【二维数组】 存放记录      
+        L    【一维数组】 存放类标志ci（i=1..n）        
+        criterion 【函数指针】 属性选择划分的度量
+        '''
         r,c = D.shape
         D_col =np.arange(c)  
         tree = _build_tree(D,D_col, L, self.criterion, self.min_split, self.multiple_branch)
         return tree
     
     def tree_w_d(self,tree):
+        '''
+        获得生成决策树的宽度和深度
+        '''
         depth =[1]
         width =[1]
         _tree_w_d(tree,1,width,depth)
         return [max(width),depth[0]] 
     
+
+    def print_tree(self,root,list_name =[], ci_name=[],width_offset = 100 , depth_offset = 100 ):
         '''
         root               决策树根节点      
         list_name          属性列表的lis名称t映射
@@ -398,7 +469,6 @@ class decision_tree_learner(object):
         width_offset       在行上宽度的偏移量
         depth_offset       在列上深度的偏移量
         '''   
-    def print_tree(self,root,list_name =[], ci_name=[],width_offset = 100 , depth_offset = 100 ):
            # 画布
         fig = plt.figure(figsize=(13,13))
            # 将画布分割成1行1列，图像画在从左到右从上到下的第1块
