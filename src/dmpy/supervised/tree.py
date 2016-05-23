@@ -6,7 +6,7 @@ e-mail:615989123@qq.com
 训练数据表（样例）
 ---------------------------------------------------------------------------------------------------------------------------------------------------
       ------------------------------D-------------------------      ---------L------- 
-key   age(col1)  inc(col2)         stu(col3)      cre(col4)          Class:buy?                 <---属性
+key   age(col0)  inc(col1)         stu(col2)      cre(col3)          Class:buy?                 <---属性
 0       1,(value)      1,             1,             1                  1(ci)                   <--- row1 
 1       1,(value)      1,             1,             2                  1                       <--- row2 
 2       2,             1,             1,             1                  0                       <--- row3 
@@ -41,9 +41,9 @@ __all__ = [
 class Node(object): 
     '''
     col        :   【int】                       属性分裂的序号 col = None代表叶子节点
-    child    :   【一维数组 Node】   子树
-    kind     :   【一维数组 int 】       对应child的kind
-    Ci         :     [int]     
+    child      :   【一维数组 Node】               子树
+    kind       :   【一维数组 int 】               对应child的kind
+    Ci         :    [int]     
     '''
     def __init__(self, key):
         self.col     = key
@@ -112,7 +112,7 @@ def _info_col_D(cur_col,L):
         kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
         # class下有多少种类ci【list】
         kind_of_cis= kind_of_cis_count.keys()
-           #  逐项计算累加
+        #  逐项计算累加
         info_col_D_tmp = .0
         for kind_of_ci in kind_of_cis:               
             info_col_D_tmp = info_col_D_tmp  +(-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
@@ -149,8 +149,12 @@ def _gini_col_D(cur_col,L):
     '''     
        计算列的基尼指数  
        cur_col     
-       L          【一维数组】 存放类标L
+       L               【一维数组】 存放类标L
        cur_col    【list】    存放一列
+       
+       返回值
+       gini_col_D  当前列最小的基尼指数
+       keys            二分之后属性值的keys
     '''    
     assert len(cur_col) == len(L)
     
@@ -166,7 +170,7 @@ def _gini_col_D(cur_col,L):
 
      #  二元划分集合
     two_partition_set = [] 
-    two_partition_set_count  = (sp.power(len(kind_of_values), 2)-2)/2
+    two_partition_set_count  = (sp.power(2,len(kind_of_values))-2)/2
     for kind_of_value in range(1,len(kind_of_values)+1):
         iter = itertools.combinations(kind_of_values,kind_of_value)
         two_partition_set+=list(iter)
@@ -174,34 +178,35 @@ def _gini_col_D(cur_col,L):
             break ;
         
     if two_partition_set_count == 1 :
-        two_partition_set = two_partition_set[0]
+        two_partition_set.pop()
+    elif two_partition_set_count == 0 :
+         two_partition_set_count+=1
         
     assert len(two_partition_set) == two_partition_set_count
     
-     #  在二元划分集合找到最小的分裂子集
+    #  在二元划分集合找到最小的分裂子集
     for a_two_partition_set in two_partition_set:
-         Class  = []
-         keys   = []
+        Class  = []
+        keys   = []
+        abs_D1 = 0
+        for a_tup in a_two_partition_set:
+            abs_D1 +=  abs(kind_of_values_count[a_tup])
+            #  value对应的key 
+            keys= [key for key,value in enumerate(cur_col) if value == a_tup]
+            #  key对应的class  
+            Class =  [L[i] for i in keys]
+        gini_D1 = _gini_D(np.array(Class))
+        D1_DIV_D_MULTI_GINID1 = float(abs_D1)/abs_D*gini_D1
          
-         abs_D1 = 0
-         for a_tup in a_two_partition_set:
-             abs_D1 +=  abs(kind_of_values_count[a_tup])
-             #  value对应的key 
-             keys= [key for key,value in enumerate(cur_col) if value == a_tup]
-             #  key对应的class  
-             Class =  [L[i] for i in keys]
-         gini_D1 = _gini_D(np.array(Class))
-         D1_DIV_D_MULTI_GINID1 = float(abs_D1)/abs_D*gini_D1
+        abs_D2 = abs_D - abs_D1
+        Class = [L[i] for i in list(set(range(0,kind_of_values_count_sum))-set(keys))]
+        gini_D2 = _gini_D(np.array(Class))
+        D2_DIV_D_MULTI_GINID2 = float(abs_D2)/abs_D*gini_D2
          
-         abs_D2 = abs_D - abs_D1
-         Class = [L[i] for i in list(set(range(0,kind_of_values_count_sum))-set(keys))]
-         gini_D2 = _gini_D(np.array(Class))
-         D2_DIV_D_MULTI_GINID2 = float(abs_D2)/abs_D*gini_D2
-         
-         if gini_col_D > D1_DIV_D_MULTI_GINID1 + D2_DIV_D_MULTI_GINID2:
+        if gini_col_D > D1_DIV_D_MULTI_GINID1 + D2_DIV_D_MULTI_GINID2:
             gini_col_D = D1_DIV_D_MULTI_GINID1 + D2_DIV_D_MULTI_GINID2
             
-    return gini_col_D
+    return gini_col_D , keys , list(set(range(0,kind_of_values_count_sum))-set(keys))
      
 
 def _split_C45(D , L , Len_D):
@@ -222,18 +227,18 @@ def _split_C45(D , L , Len_D):
     #  计算所有列的信息熵，      
     rows,cols = D.shape
     for col in range(cols) :
-          #  当前列
+        #  当前列
         cur_col = D[:,col]
-          #  当前列的分裂信息
+        #  当前列的分裂信息
         split_info_col_D   = _split_info_col_D(cur_col,L,Len_D)
-          #  当前列的信息熵
+        #  当前列的信息熵
         info_col_D         = _info_col_D(cur_col,L)
-          #  当前列的信息增益
+        #  当前列的信息增益
         gain_col_D         = info_D - info_col_D
-          #   当前列的增益率
+        #  当前列的增益率
         gain_rate_col_D    = gain_col_D / split_info_col_D
         
-          # 获得最大的信息增益
+        # 获得最大的信息增益
         if  gain_rate_col_D >  max_gain_rate :
             max_gain_rate = gain_rate_col_D
             best_col = col        
@@ -269,30 +274,34 @@ def _split_ID3(D , L):
     return  best_col
 
 def _split_GINI(D , L):
-     '''
-     D  【二维数组】 存放记录D      
-     L  【一维数组】 存放类标L
+    '''
+    D  【二维数组】 存放记录D      
+    L  【一维数组】 存放类标L
     '''    
-     #   最大信息增益
-     max_gini =  float('-Inf')  
-     #   数据集的信息熵
-     gini_D   = 0.0
-     #  最好的分裂属性  
-     best_col = None
-     # 计算数据集信息熵  
-     gini_D =   _gini_D(L)
+    #   最大信息增益
+    max_gini =  float('-Inf')  
+    #   数据集的基尼指数
+    gini_D    = 0.0
+    keys_D1 = []
+    keys_D2 = []
+    #  最好的分裂属性  
+    best_col = None
+    # 计算数据集信息熵  
+    gini_D =   _gini_D(L)
      
-     #  计算所有列的基尼指数，      
-     rows,cols = D.shape
-     for col in range(cols) :
-           # 当前列的基尼指数
+    #  计算所有列的基尼指数，      
+    rows,cols = D.shape
+    for col in range(cols) :
+        # 当前列的基尼指数
         cur_col = D[:,col]
-        gini_col_D = _gini_col_D(cur_col,L)
-           # 获得最大的信息增益
+        gini_col_D , keysD1 ,keysD2= _gini_col_D(cur_col,L)
+        # 获得最大的信息增益
         if  gini_D - gini_col_D >  max_gini :
             max_gini = gini_D - gini_col_D
+            keys_D1  = keysD1
+            keys_D2  = keysD2
             best_col = col          
-     return  best_col
+    return  best_col,keys_D1,keys_D2
     
 def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
     '''
@@ -332,7 +341,38 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
     elif criterion == 'C45' :
         best_col  = _split_C45(D, L ,len(D)) 
     elif criterion == 'CART' :
-        best_col  = _split_GINI(D, L) 
+        best_col ,keys_D1,keys_D2 = _split_GINI(D, L) 
+        N.col  = best_col
+        # CART产生二叉树，与ID3和C4.5的分区划分略有不同
+        Dj= D[keys_D1]
+        Lj= L[keys_D1]
+        if len(Dj) == 0  :
+                #  加入一个树叶到节点N，标记D为多数类
+            max_ci_count = 0
+            for i in L :
+                if(max_ci_count<L.tolist().count(i)):
+                    max_ci_count = L.tolist().count(i)
+                    N.ci         = i 
+            return N
+        else:
+            child = _build_tree(Dj, D_col ,Lj, criterion, min_split, multiple_branch)    
+            kind_of_best_col_value = list(set(Dj[:,best_col]))
+            N.add_child(child ,kind_of_best_col_value)          
+        Dj= D[keys_D2]
+        Lj= L[keys_D2]
+        if len(Dj) == 0  :
+                #  加入一个树叶到节点N，标记D为多数类
+            max_ci_count = 0
+            for i in L :
+                if(max_ci_count<L.tolist().count(i)):
+                    max_ci_count = L.tolist().count(i)
+                    N.ci         = i 
+            return N
+        else:
+            child = _build_tree(Dj, D_col ,Lj, criterion, min_split, multiple_branch)    
+            kind_of_best_col_value = list(set(Dj[:,best_col]))
+            N.add_child(child ,kind_of_best_col_value)
+        return N;
         
         
     #  用最好的分裂属性标记节点N
@@ -344,7 +384,7 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
     kind_of_best_col_values_count = Counter(best_col_values)
     #  分裂属性下有多少种类values【list】
     kind_of_best_col_values= kind_of_best_col_values_count.keys()
-    for kind_of_best_col_value in kind_of_best_col_values :
+    for kind_of_best_col_value in kind_of_best_col_values :             
         #  value对应的key 
         keys= [key for key,value in enumerate(best_col_values) if value == kind_of_best_col_value]
         Dj= D[keys]
@@ -382,7 +422,10 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
     # 打印叶子节点  
     if node.col == None:
         ax.plot(width[depth-1]*width_offset,depth*depth_offset, 'bo')
-        str1 = '%s  (%d)'   % (ci_name[node.Ci] , node.kind )
+        str1 = '%s '   % (ci_name[node.Ci])
+        for kind_item in node.kind:
+            str_kind_item = "(%i)" %kind_item
+            str1+=str_kind_item
         plt.annotate(str1, xy = (width[depth-1]*width_offset,depth*depth_offset)) 
         if(location != [0,0] ):
             ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-')
@@ -392,7 +435,10 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
         str1 =''
         if hasattr(node,'kind') :
             kind = node.kind
-            str1 = '%s  (%d)'   %  (list_name[node.col],  kind ) 
+            str1 = '%s'   %  (list_name[node.col])         
+            for kind_item in node.kind:
+                str_kind_item = "(%i)" %kind_item
+                str1+=str_kind_item
         else:
             str1 = '%s '   %  (list_name[node.col] ) 
         plt.annotate(str1, xy = (width[depth-1]*width_offset,depth*depth_offset)) 
