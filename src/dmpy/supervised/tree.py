@@ -38,10 +38,10 @@ __all__ = [
 
 class Node(object): 
     '''
-    col        :   【int】                       属性分裂的序号 col = None代表叶子节点
+    col        :   【int】                        属性分裂的序号 col = None代表叶子节点
     child      :   【一维数组 Node】               子树
-    kind       :   【一维数组 int 】               对应child的kind
-    Ci         :    [int]     
+    kind       :   【一维数组 int 】                对应child的kind
+    Ci         :    [int]                        类标识
     '''
     def __init__(self, key):
         self.col     = key
@@ -206,7 +206,6 @@ def _gini_col_D(cur_col,L):
             
     return gini_col_D , keys , list(set(range(0,kind_of_values_count_sum))-set(keys))
      
-
 def _split_C45(D , D_col,L , Len_D):
     '''
      D          【二维数组】 存放记录D
@@ -237,7 +236,6 @@ def _split_C45(D , D_col,L , Len_D):
         #  当前列的信息增益
         gain_col_D         = info_D - info_col_D
         #  当前列的增益率
-        print gain_col_D,split_info_col_D
         gain_rate_col_D    = gain_col_D / split_info_col_D
         
         # 获得最大的信息增益
@@ -307,7 +305,6 @@ def _split_GINI(D , L):
             best_col = col          
     return  best_col,keys_D1,keys_D2
  
-
 def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
     '''
      D                 【二维数组】 存放记录    
@@ -438,7 +435,7 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
         plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
             ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
-    # 打印分裂节点
+      # 打印分裂节点
     else :  
         ax.plot(width[depth-1]*width_offset,depth*depth_offset,  'ro')
         str1 =''
@@ -451,13 +448,14 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
             str1 = '%s '   %  (list_name[node.col] ) 
         plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
-            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
+          ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
+       
     location = [depth ,width[depth-1] ]
     for child in node.child :
-            if child is node.child[0]:
-                depth= depth +1        
-            _print_tree(child ,ax,width_offset,depth_offset,list_name,ci_name,depth,width,location)
-            width[depth-1]= width[depth-1]+1
+        if child is node.child[0]:
+            depth= depth +1        
+        _print_tree(child ,ax,width_offset,depth_offset,list_name,ci_name,depth,width,location)
+        width[depth-1]= width[depth-1]+1
 
 def _tree_w_d(tree,d,width,depth):
     '''
@@ -468,7 +466,6 @@ def _tree_w_d(tree,d,width,depth):
      '''
     if(d > len(width)):
         width += [0]
-    #print d ,width
     for node in tree.child :
         if node is tree.child[0]:
             d = d+1         
@@ -477,6 +474,24 @@ def _tree_w_d(tree,d,width,depth):
         _tree_w_d(node,d,width,depth)
         width[d-1]= width[d-1]+1
         
+def _apply_tree(tree, features):
+    '''
+    应用决策树
+    conf = apply_tree(tree, features)
+    features  :    【一维数组 int 】     一个需要预测的数据元组      
+    '''
+    if tree.col is None:
+        return tree.Ci
+    
+    features_list = list(features)
+    features_col_value = features[tree.col]
+    for child in tree.child :
+        if(child.kind == features_col_value):
+            return _apply_tree(child,features)
+
+      #  一个数据类型错误的预测数据元组，该列值在训练元组中相应的列上不存在
+    assert False
+                                        
 class decision_tree_learner(object):
 
     def __init__(self,criterion='ID3', min_split=4,multiple_branch=True):
@@ -493,7 +508,6 @@ class decision_tree_learner(object):
            #  当前决策树的宽度
         self.width           = [0]
         
-
     def train_tree(self,D, L, weights=None):
         '''
         D    【二维数组】 存放记录      
@@ -503,9 +517,19 @@ class decision_tree_learner(object):
         r,c = D.shape
         D_col =np.arange(c).tolist()  
         tree = _build_tree(D,r,D_col, L, self.criterion, self.min_split, self.multiple_branch)
-        return tree
+        return tree_model(tree)
+            
+class tree_model():
+     '''
+    tree model
+    '''
+     def __init__(self, tree):
+        self.tree = tree
+
+     def apply(self,feats):
+        return _apply_tree(self.tree, feats)
     
-    def tree_w_d(self,tree):
+     def tree_w_d(self,tree):
         '''
         获得生成决策树的宽度和深度
         '''
@@ -514,14 +538,13 @@ class decision_tree_learner(object):
         _tree_w_d(tree,1,width,depth)
         return [max(width),depth[0]] 
     
-
-    def print_tree(self,root,list_name =[], ci_name=[],width_offset = 100 , depth_offset = 50 ):
+     def print_tree(self,list_name =[], ci_name=[],width_offset = 100 , depth_offset = 50 ,outfile = '/test.png'):
         '''
-        root               决策树根节点      
         list_name          属性列表的lis名称t映射
         ci_name            状态列表的lis名称t映射
         width_offset       在行上宽度的偏移量
         depth_offset       在列上深度的偏移量
+        apply_data_class   预测的数据结果，在图形上进行描红
         '''   
            # 画布
         fig = plt.figure(figsize=(13,13))
@@ -531,14 +554,15 @@ class decision_tree_learner(object):
         ax = fig.add_subplot(111)
            # 坐标
         ax.grid()
-        width ,depth = self.tree_w_d(root)
+        width ,depth = self.tree_w_d(self.tree )
         l=[0,(width+1)*width_offset,(depth+1)*depth_offset,0]  
         plt.axis(l)
 
            # 打印树  
         depth =1
         width =[1]
-        _print_tree(root,ax,width_offset,depth_offset,list_name,ci_name,1,width,[0,0])  
+        _print_tree(self.tree ,ax,width_offset,depth_offset,list_name,ci_name,1,width,[0,0])  
            # 保存成图片
         plt.show()  
-        plt.savefig('/root/workspace/DMPY/src/test.png', dpi=240)
+        plt.savefig(outfile, dpi=240)
+tree_model
