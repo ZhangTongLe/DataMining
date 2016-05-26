@@ -32,8 +32,6 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import itertools
 
-
-
 __all__ = [
     'decision_tree_learner',
     ]
@@ -209,12 +207,15 @@ def _gini_col_D(cur_col,L):
     return gini_col_D , keys , list(set(range(0,kind_of_values_count_sum))-set(keys))
      
 
-def _split_C45(D , L , Len_D):
+def _split_C45(D , D_col,L , Len_D):
     '''
-     D          【二维数组】 存放记录D      
+     D          【二维数组】 存放记录D
+     D_col      【一维数组】 存放记录D的列名        
      L          【一维数组】 存放类标L
      Len_D       [int]     训练集元组的个数
     '''    
+    assert D.shape[1] == len(D_col)
+    
     #   最大增益率
     max_gain_rate =  float('-Inf')  
     #   数据集的信息熵
@@ -236,20 +237,23 @@ def _split_C45(D , L , Len_D):
         #  当前列的信息增益
         gain_col_D         = info_D - info_col_D
         #  当前列的增益率
+        print gain_col_D,split_info_col_D
         gain_rate_col_D    = gain_col_D / split_info_col_D
         
         # 获得最大的信息增益
         if  gain_rate_col_D >  max_gain_rate :
             max_gain_rate = gain_rate_col_D
-            best_col = col        
+            best_col = D_col[col]            
             
     return  best_col
 
-def _split_ID3(D , L):
+def _split_ID3(D , D_col, L):
     '''
-     D  【二维数组】 存放记录D      
-     L  【一维数组】 存放类标L
+     D      【二维数组】 存放记录D     
+     D_col  【一维数组】 存放记录D的列名      
+     L      【一维数组】 存放类标L
     '''    
+    assert D.shape[1] == len(D_col)
     #   最大信息增益
     max_gain =  float('-Inf')  
     #   数据集的信息熵
@@ -270,7 +274,7 @@ def _split_ID3(D , L):
           # 获得最大的信息增益
         if  info_D - info_col_D >  max_gain :
             max_gain = info_D - info_col_D
-            best_col = col          
+            best_col = D_col[col]          
     return  best_col
 
 def _split_GINI(D , L):
@@ -302,10 +306,12 @@ def _split_GINI(D , L):
             keys_D2  = keysD2
             best_col = col          
     return  best_col,keys_D1,keys_D2
-    
-def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
+ 
+
+def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
     '''
-     D                 【二维数组】 存放记录      
+     D                 【二维数组】 存放记录    
+     Len_D              [int]     训练集元组初始的总个数  
      D_col             【一维数组】 属性列表      
      L                 【一维数组】 存放类标志Ci（i=0..n）    
      criterion         【函数指针】 属性选择划分的度量
@@ -314,8 +320,7 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
     '''    
     # 记录和类标志的长度匹配
     assert len(D) == len(L)
-
-    
+        
     #  创建一个节点N
     N = Node(None)
     
@@ -337,9 +342,9 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
     #  找出最好的分裂属性
     best_col  = None
     if criterion   == 'ID3' :
-        best_col  = _split_ID3(D, L) 
+        best_col  = _split_ID3(D, D_col ,L) 
     elif criterion == 'C45' :
-        best_col  = _split_C45(D, L ,len(D)) 
+        best_col  = _split_C45(D,D_col, L ,Len_D) 
     elif criterion == 'CART' :
         best_col ,keys_D1,keys_D2 = _split_GINI(D, L) 
         N.col  = best_col
@@ -355,7 +360,7 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
                     N.ci         = i 
             return N
         else:
-            child = _build_tree(Dj, D_col ,Lj, criterion, min_split, multiple_branch)    
+            child = _build_tree(Dj,Len_D ,D_col ,Lj, criterion, min_split, multiple_branch)    
             kind_of_best_col_value = list(set(Dj[:,best_col]))
             N.add_child(child ,kind_of_best_col_value)          
         Dj= D[keys_D2]
@@ -369,7 +374,7 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
                     N.ci         = i 
             return N
         else:
-            child = _build_tree(Dj, D_col ,Lj, criterion, min_split, multiple_branch)    
+            child = _build_tree(Dj, Len_D,D_col ,Lj, criterion, min_split, multiple_branch)    
             kind_of_best_col_value = list(set(Dj[:,best_col]))
             N.add_child(child ,kind_of_best_col_value)
         return N;
@@ -377,23 +382,27 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
         
     #  用最好的分裂属性标记节点N
     N.col  = best_col
-    
+
+                        
     #  划分元组输出Dj、Lj并且对每个分区产生子树
-    best_col_values = D[:,best_col]
+    best_col_values = D[:,D_col.index(best_col)]
+    
+     #  如果允许多路划分，删除分裂的属性
+    if multiple_branch :
+        D = np.delete(D, D_col.index(best_col), axis = 1) 
+        D_col.remove(best_col)  
+            
     #  分裂属性下每个种类values的个数【dict】
     kind_of_best_col_values_count = Counter(best_col_values)
     #  分裂属性下有多少种类values【list】
     kind_of_best_col_values= kind_of_best_col_values_count.keys()
-    for kind_of_best_col_value in kind_of_best_col_values :             
+    for kind_of_best_col_value in kind_of_best_col_values :      
         #  value对应的key 
         keys= [key for key,value in enumerate(best_col_values) if value == kind_of_best_col_value]
         Dj= D[keys]
         Lj= L[keys]
-        #  如果允许多路划分，删除分裂的属性
-        if multiple_branch :
-            Dj = np.delete(Dj, best_col, axis = 1)
-        
-        if len(Dj) == 0  :
+                
+        if Dj.shape[1] == 0 or Dj.shape[0] == 0 :
             #  加入一个树叶到节点N，标记D为多数类
             max_ci_count = 0
             for i in L :
@@ -402,8 +411,8 @@ def _build_tree(D, D_col ,L, criterion, min_split, multiple_branch):
                     N.ci         = i 
             return N
         else:
-            child = _build_tree(Dj, D_col ,Lj, criterion, min_split, multiple_branch)    
-            N.add_child(child ,kind_of_best_col_value)
+            child = _build_tree(Dj,Len_D ,D_col[:] ,Lj, criterion, min_split, multiple_branch)    
+            N.add_child(child , [kind_of_best_col_value])
     return N;
 
 def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width,location):
@@ -422,28 +431,27 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
     # 打印叶子节点  
     if node.col == None:
         ax.plot(width[depth-1]*width_offset,depth*depth_offset, 'bo')
-        str1 = '%s '   % (ci_name[node.Ci])
+        str1 = '\n%s '   % (ci_name[node.Ci])
         for kind_item in node.kind:
-            str_kind_item = "(%i)" %kind_item
-            str1+=str_kind_item
-        plt.annotate(str1, xy = (width[depth-1]*width_offset,depth*depth_offset)) 
+            str_kind_item = "%i " %kind_item
+            str1=str_kind_item+str1
+        plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
-            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-')
+            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
     # 打印分裂节点
     else :  
         ax.plot(width[depth-1]*width_offset,depth*depth_offset,  'ro')
         str1 =''
         if hasattr(node,'kind') :
-            kind = node.kind
-            str1 = '%s'   %  (list_name[node.col])         
+            str1 = '\n%s'   %  (list_name[node.col])         
             for kind_item in node.kind:
-                str_kind_item = "(%i)" %kind_item
-                str1+=str_kind_item
+                str_kind_item = "%i " %kind_item
+                str1=str_kind_item+str1
         else:
             str1 = '%s '   %  (list_name[node.col] ) 
-        plt.annotate(str1, xy = (width[depth-1]*width_offset,depth*depth_offset)) 
+        plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
-            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-')
+            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
     location = [depth ,width[depth-1] ]
     for child in node.child :
             if child is node.child[0]:
@@ -493,8 +501,8 @@ class decision_tree_learner(object):
         criterion 【函数指针】 属性选择划分的度量
         '''
         r,c = D.shape
-        D_col =np.arange(c)  
-        tree = _build_tree(D,D_col, L, self.criterion, self.min_split, self.multiple_branch)
+        D_col =np.arange(c).tolist()  
+        tree = _build_tree(D,r,D_col, L, self.criterion, self.min_split, self.multiple_branch)
         return tree
     
     def tree_w_d(self,tree):
@@ -507,7 +515,7 @@ class decision_tree_learner(object):
         return [max(width),depth[0]] 
     
 
-    def print_tree(self,root,list_name =[], ci_name=[],width_offset = 100 , depth_offset = 100 ):
+    def print_tree(self,root,list_name =[], ci_name=[],width_offset = 100 , depth_offset = 50 ):
         '''
         root               决策树根节点      
         list_name          属性列表的lis名称t映射
@@ -517,6 +525,8 @@ class decision_tree_learner(object):
         '''   
            # 画布
         fig = plt.figure(figsize=(13,13))
+        
+
            # 将画布分割成1行1列，图像画在从左到右从上到下的第1块
         ax = fig.add_subplot(111)
            # 坐标
@@ -524,10 +534,11 @@ class decision_tree_learner(object):
         width ,depth = self.tree_w_d(root)
         l=[0,(width+1)*width_offset,(depth+1)*depth_offset,0]  
         plt.axis(l)
+
            # 打印树  
         depth =1
         width =[1]
         _print_tree(root,ax,width_offset,depth_offset,list_name,ci_name,1,width,[0,0])  
            # 保存成图片
         plt.show()  
-        plt.savefig('/root/workspace/DMPY/src/test.png', dpi=120)
+        plt.savefig('/root/workspace/DMPY/src/test.png', dpi=240)
