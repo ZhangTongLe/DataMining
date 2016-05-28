@@ -38,15 +38,17 @@ __all__ = [
 
 class Node(object): 
     '''
-    col        :   【int】                        属性分裂的序号 col = None代表叶子节点
-    child      :   【一维数组 Node】               子树
-    kind       :   【一维数组 int 】                对应child的kind
-    Ci         :    [int]                        类标识
+    col        :   【int】                         属性分裂的序号 col = None代表叶子节点
+    child      :   【一维数组 Node】                 子树
+    kind       :   【一维数组 int 】                 对应child的kind
+    Ci         :    [int]                         类标识
+    Ci_count   :    元组                               当前节点的Ci分类个数统计                
     '''
     def __init__(self, key):
         self.col     = key
         self.child   = np.array([],dtype = Node)
         self.Ci      = None 
+        self.Ci_count= None
     def add_child(self,child,kind):
         child.kind  = kind
         self.child    = np.insert(self.child , len(self.child),child)
@@ -321,6 +323,7 @@ def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
     #  创建一个节点N
     N = Node(None)
     
+    N.Ci_count = Counter(L)
  
     #  D中的元组都属于同一类,返回N作为叶子节点，用Ci标记
     if np.max(L) == np.min(L):
@@ -333,8 +336,19 @@ def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
         for i in L :
             if(max_ci_count<L.tolist().count(i)):
                 max_ci_count = L.tolist().count(i)
-                N.ci         = i 
+                N.Ci         = i 
         return N
+        
+      # 一个节点下的样本属性太少  
+    if D.shape[0] < min_split:
+        #  加入一个树叶到节点N，标记D为多数类
+      max_ci_count = 0
+      for i in L:
+            if(max_ci_count<L.tolist().count(i)):
+                max_ci_count = L.tolist().count(i)
+                N.Ci         = i 
+      return N
+        
         
     #  找出最好的分裂属性
     best_col  = None
@@ -347,39 +361,21 @@ def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
         N.col  = best_col
         # CART产生二叉树，与ID3和C4.5的分区划分略有不同
         Dj= D[keys_D1]
-        Lj= L[keys_D1]
-        if len(Dj) == 0  :
-                #  加入一个树叶到节点N，标记D为多数类
-            max_ci_count = 0
-            for i in L :
-                if(max_ci_count<L.tolist().count(i)):
-                    max_ci_count = L.tolist().count(i)
-                    N.ci         = i 
-            return N
-        else:
-            child = _build_tree(Dj,Len_D ,D_col ,Lj, criterion, min_split, multiple_branch)    
-            kind_of_best_col_value = list(set(Dj[:,best_col]))
-            N.add_child(child ,kind_of_best_col_value)          
+        Lj= L[keys_D1]   
+        child = _build_tree(Dj,Len_D ,D_col ,Lj, criterion, min_split, multiple_branch)    
+        kind_of_best_col_value = list(set(Dj[:,best_col]))
+        N.add_child(child ,kind_of_best_col_value)          
+        
         Dj= D[keys_D2]
         Lj= L[keys_D2]
-        if len(Dj) == 0  :
-                #  加入一个树叶到节点N，标记D为多数类
-            max_ci_count = 0
-            for i in L :
-                if(max_ci_count<L.tolist().count(i)):
-                    max_ci_count = L.tolist().count(i)
-                    N.ci         = i 
-            return N
-        else:
-            child = _build_tree(Dj, Len_D,D_col ,Lj, criterion, min_split, multiple_branch)    
-            kind_of_best_col_value = list(set(Dj[:,best_col]))
-            N.add_child(child ,kind_of_best_col_value)
+        child = _build_tree(Dj, Len_D,D_col ,Lj, criterion, min_split, multiple_branch)    
+        kind_of_best_col_value = list(set(Dj[:,best_col]))
+        N.add_child(child ,kind_of_best_col_value)
         return N;
         
         
     #  用最好的分裂属性标记节点N
     N.col  = best_col
-
                         
     #  划分元组输出Dj、Lj并且对每个分区产生子树
     best_col_values = D[:,D_col.index(best_col)]
@@ -393,23 +389,14 @@ def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
     kind_of_best_col_values_count = Counter(best_col_values)
     #  分裂属性下有多少种类values【list】
     kind_of_best_col_values= kind_of_best_col_values_count.keys()
+    
     for kind_of_best_col_value in kind_of_best_col_values :      
         #  value对应的key 
         keys= [key for key,value in enumerate(best_col_values) if value == kind_of_best_col_value]
         Dj= D[keys]
         Lj= L[keys]
-                
-        if Dj.shape[1] == 0 or Dj.shape[0] == 0 :
-            #  加入一个树叶到节点N，标记D为多数类
-            max_ci_count = 0
-            for i in L :
-                if(max_ci_count<L.tolist().count(i)):
-                    max_ci_count = L.tolist().count(i)
-                    N.ci         = i 
-            return N
-        else:
-            child = _build_tree(Dj,Len_D ,D_col[:] ,Lj, criterion, min_split, multiple_branch)    
-            N.add_child(child , [kind_of_best_col_value])
+        child = _build_tree(Dj,Len_D ,D_col[:] ,Lj, criterion, min_split, multiple_branch)    
+        N.add_child(child , [kind_of_best_col_value])
     return N;
 
 def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width,location):
@@ -486,7 +473,7 @@ def _apply_tree(tree, features):
     features_list = list(features)
     features_col_value = features[tree.col]
     for child in tree.child :
-        if(child.kind == features_col_value):
+        if([features_col_value] in child.kind ):
             return _apply_tree(child,features)
 
       #  一个数据类型错误的预测数据元组，该列值在训练元组中相应的列上不存在
@@ -529,6 +516,80 @@ class tree_model():
      def apply(self,feats):
         return _apply_tree(self.tree, feats)
     
+     def apply_error(self,D, L):
+           '''
+              训练误差（再代入误差），使用训练集作为样本，是种乐观估计，训练集好的时候可以作为泛化误差
+               D                 【二维数组】 存放记录    
+               L                 【一维数组】 存放类标志Ci（i=0..n）   
+              返回值 ： 误差率、误差个数
+          '''    
+           assert len(D) == len(L)
+           result_l = [self.apply(Di) for Di in D]
+           assert len(result_l) == len(L.tolist())
+           result_compare =  np.transpose(np.array((L,result_l))) 
+           result_compare  = [x[0]==x[1] for x in result_compare]   
+           # True  = 1 ,False = 0   
+           result_right = np.count_nonzero(result_compare)   
+           return 1 -(result_right/float(len(result_compare))),len(result_compare) - result_right
+    
+     def pessimistic_error(self,D,L,penalty_term):
+           '''
+              悲观误差评估 --- 该评估结合了模型复杂度（叶子节点的个数）
+               D                 【二维数组】 存放记录    
+               L                 【一维数组】 存放类标志Ci（i=0..n）   
+               penalty_term      【复杂度罚项】 
+          '''   
+           assert len(D) == len(L)
+              # 决策树总的训练误差
+           apply_error_rate , e_T_= self.apply_error(D, L)
+           
+              # 决策书叶子节点个数
+           def recursion(node , leaf_count):
+              if(node.col == None) :
+                leaf_count[0] = leaf_count[0] + 1
+              for child in node.child:
+                recursion(child,leaf_count)
+           leaf_count=[0]
+           recursion(self.tree,leaf_count)
+             
+              # 罚项总和
+           omega_T  = leaf_count[0]*penalty_term
+           
+              #  训练记录个数
+           N_t = len(L)
+           
+           return (e_T_+omega_T)/float(N_t)
+                 
+     def MDL(self,D,L):      
+        '''
+              最小描述长度原则评估泛化误差 --- 该评估结合了模型复杂度（叶子节点的个数、中间节点个数，错误训练个数）
+               D                 【二维数组】 存放记录    
+               L                 【一维数组】 存放类标志Ci（i=0..n）   
+       '''        
+           # 决策书叶子节点个数和属性节点个数
+        def recursion(node ,branch_count ,leaf_count):
+            if(node.col == None) :
+               leaf_count[0] = leaf_count[0] + 1
+            else:
+               branch_count[0] = branch_count[0] + 1
+            for child in node.child:
+               recursion(child,branch_count,leaf_count)
+        leaf_count_k     =[0]
+        branch_count_m   =[0]
+        recursion(self.tree,branch_count_m,leaf_count_k)
+         
+           # 决策树所有节点的编码开销
+        Cost_tree = sp.log2(branch_count_m[0])*branch_count_m[0]+sp.log2(leaf_count_k[0])*leaf_count_k[0]
+           # 决策树总的训练误差
+        apply_error_rate , e_T_= self.apply_error(D, L)
+        
+           #  训练记录个数
+        N_t = len(L)
+           
+           # 在训练集上分类错误编码开销
+        Cost_data_tree = sp.log2(N_t)*e_T_
+        return    Cost_tree+Cost_data_tree
+     
      def tree_w_d(self,tree):
         '''
         获得生成决策树的宽度和深度
@@ -565,4 +626,3 @@ class tree_model():
            # 保存成图片
         plt.show()  
         plt.savefig(outfile, dpi=240)
-tree_model
