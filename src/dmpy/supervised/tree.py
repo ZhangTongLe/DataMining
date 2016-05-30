@@ -478,7 +478,23 @@ def _apply_tree(tree, features):
 
       #  一个数据类型错误的预测数据元组，该列值在训练元组中相应的列上不存在
     assert False
-                                        
+     
+def _apply_error(node ,D, L):  
+    '''
+        训练误差（再代入误差），使用训练集作为样本，是种乐观估计，训练集好的时候可以作为泛化误差
+        D                 【二维数组】 存放记录    
+        L                 【一维数组】 存放类标志Ci（i=0..n）   
+              返回值 ： 误差率、误差个数
+    '''         
+    assert len(D) == len(L)
+    result_l = [_apply_tree(node,Di) for Di in D]
+    assert len(result_l) == len(L.tolist())
+    result_compare =  np.transpose(np.array((L,result_l))) 
+    result_compare  = [x[0]==x[1] for x in result_compare]   
+     # True  = 1 ,False = 0   
+    result_right = np.count_nonzero(result_compare)   
+    return 1 -(result_right/float(len(result_compare))),len(result_compare) - result_right       
+               
 class decision_tree_learner(object):
 
     def __init__(self,criterion='ID3', min_split=4,multiple_branch=True):
@@ -514,7 +530,11 @@ class tree_model():
         self.tree = tree
 
      def apply(self,feats):
-        return _apply_tree(self.tree, feats)
+           '''
+            应用决策树
+            features  :    【一维数组 int 】     一个需要预测的数据元组      
+         '''
+           return _apply_tree(self.tree, feats)
     
      def apply_error(self,D, L):
            '''
@@ -523,14 +543,7 @@ class tree_model():
                L                 【一维数组】 存放类标志Ci（i=0..n）   
               返回值 ： 误差率、误差个数
           '''    
-           assert len(D) == len(L)
-           result_l = [self.apply(Di) for Di in D]
-           assert len(result_l) == len(L.tolist())
-           result_compare =  np.transpose(np.array((L,result_l))) 
-           result_compare  = [x[0]==x[1] for x in result_compare]   
-           # True  = 1 ,False = 0   
-           result_right = np.count_nonzero(result_compare)   
-           return 1 -(result_right/float(len(result_compare))),len(result_compare) - result_right
+           return _apply_error(self.tree ,D, L)
     
      def pessimistic_error(self,D,L,penalty_term):
            '''
@@ -559,7 +572,82 @@ class tree_model():
            N_t = len(L)
            
            return (e_T_+omega_T)/float(N_t)
-                 
+       
+     def PEP(self,D, L, penalty_term = 0.5):
+           '''
+                  悲观误差剪枝 --- Pessimistic Error Pruning(PEP，悲观剪枝）
+                Quinlan提出的PEP剪枝算法是通过比较剪枝前和剪枝后的错分样本数来判断是否剪枝的它在ID3系统中获得实现。PEP既采用训练集来生成决策树又用它来进行剪枝,
+              不需要独立的剪枝集。这样,由于决策树生成和剪枝都使用训练集,所以产生的错分样本率r(t)是有偏差的,即偏向于训练集,无法得到最优的剪枝树。对此Quinlan引入了一
+              个基于二项分布的连续校正公式来对在训练集中产生的错分样本率r(t)进行校正,经过校正后可以得到一个较为合理的错分样本率。
+                  假设对于训练集的错分样本率为r(t),计算公式为r(t)=e(t)/n(t);
+                  连续校正后的错分样本率为r′(t),计算公式为r′(t)=[e(t)+1/2]/n(t)。
+                  为简单起见,在下面计算过程中采用错分样本数而不用错分样本率来说明问题。经过连续校正后,对节点t进行剪枝产生的错分样本数为e′(t)=[e(t)+1/2];未剪
+              枝的错分样本数变为e′(Tt)=∑[e(s)+1/2],s∈{Tt子树的所有叶节点};进一步,引入子树Tt的服从二项分布的标准错误
+            SE(e′(Tt)),SE(e′(Tt))=[e′(Tt)・(n(t)-e′(Tt))/n(t)]^(1/2)。
+                PEP算法采用自顶向下的顺序遍历完全决策树Tmax,对于每个内部节点t逐一比较e′(t)和e′(Tt)+SE(e′(Tt))的大小,当满足条件e′(t)<=e′(Tt)+SE(e′(Tt))时,
+              就进行剪枝,剪掉以t为根节点的子树Tt而代之为一个叶节点,该叶节点所标识的类别由“大多数原则”确定。
+               PEP算法是唯一使用Top-Down剪枝策略，这种策略会导致与先剪枝出现同样的问题，将该结点的某子节点不需要被剪枝时被剪掉；另外PEP方法会有剪枝失败的情况出现。
+              虽然PEP方法存在一些局限性，但是在实际应用中表现出了较高的精度,。两外PEP方法不需要分离训练集合和验证机和，对于数据量比较少的情况比较有利。再者其剪枝策略比
+              其它方法相比效率更高，速度更快。因为在剪枝过程中，树中的每颗子树最多需要访问一次，在最坏的情况下，它的计算时间复杂度也只和非剪枝树的非叶子节点数目成线性关系。
+          
+               Tmax:由决策树生成算法生成的未剪枝的完全决策树;
+               Tt:以内部节点t为根的一棵子树;
+               n(t):到达节点t的所有样本数目;
+               ni(t):到达节点t且属于第i类的样本数目;
+               e(t):到达节点t但不属于节点t所标识的类别的样本数目;
+               r(t):错分样本率,其值为e(t)/n(t)。
+               
+                D                 【二维数组】 存放记录    
+                L                 【一维数组】 存放类标志Ci（i=0..n）   
+                penalty_term      【经验性的惩罚因子】 
+            '''   
+           
+               # 自顶向下的顺序遍历完全决策树Tmax,对于每个内部节点t逐一比较, 如果剪枝剪掉了，就到下一个内部节点，否则继续。
+           def recursion(T , D, L,penalty_term):
+              assert len(D) == len(L)
+              if(T.col == None) :
+                  return              
+
+                   # 决策树叶子节点个数
+              def recursion1(T , leaf_count):
+                  if(T.col == None) :
+                      leaf_count[0] = leaf_count[0] + 1
+                  for child in T.child:
+                      recursion(child,leaf_count)
+              leaf_count=[0]            
+              recursion1(T,leaf_count)
+                  # 罚项总和
+              omega_T  = leaf_count[0]*penalty_term
+                  #  未剪枝的错分样本数变为 e′(Tt)=∑[e(s)+1/2],s∈{Tt子树的所有叶节点};
+              apply_error_rate , e_T_t = _apply_error(self.tree ,D, L)
+              e_T_t = e_T_t + omega_T               
+                  #  训练记录个数
+              n_t = len(L)  
+              
+              # e'(Tt)的标准差，由于误差近似看成是二项式分布     
+              # SE(e′(Tt)),SE(e′(Tt))=[e′(Tt)・(n(t)-e′(Tt))/n(t)]^1/2
+              SE_e_T_t = sp.pow(e_T_t*(n_t-e_T_t)/float(n_t),0.5)
+
+                   # 该叶节点所标识的类别的“大多数原则”
+              def recursion2(T , majority_classc):
+                  if(T.col != None) :
+                      return
+                  append (majority_classc,T.kind)
+                  for child in T.child:
+                      recursion(child,leaf_count)
+              majority_classc=[]            
+              recursion2(T,majority_classc)
+              majority_classc = Counter(majority_classc)
+              
+                   #当满足条件e′(t)<=e′(Tt)+SE(e′(Tt))时,就进行剪枝,剪掉以t为根节点的子树Tt而代之为一个叶节点,该叶节点所标识的类别由“大多数原则”确定。
+              if e_T_t <= 
+                  
+              for child in node.child:
+                recursion(child)
+
+           recursion(self.tree)
+           pass 
+               
      def MDL(self,D,L):      
         '''
               最小描述长度原则评估泛化误差 --- 该评估结合了模型复杂度（叶子节点的个数、中间节点个数，错误训练个数）
