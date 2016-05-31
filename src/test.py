@@ -55,14 +55,19 @@ if __name__ == '__main__' or __name__ == 'test_tree':
     print "apply_error_rate=",apply_error,"e(T)=",e_T_
     
      # 悲观误差评估 
-    pe = model.pessimistic_error(D, L,0.5)
+    pe = model.pessimistic_error(D, L,1.0/20.0)
     print "pessimistic_error=",pe
     
     # MDL误差评估
     mdl = model.MDL(D,L)
     print "MDL =" ,mdl  
+     
+     # 悲观剪枝
+    model.PEP(D, L,1./20.0)
+    model.print_tree(list_name,ci_name ,outfile = '/root/workspace/DMPY/src/'+criterion+'_PEP.png')
     
-    
-    
+      # 悲观误差评估 
+    pe = model.pessimistic_error(D, L,1.0/20.0)
+    print "pessimistic_error=",pe   
     
     

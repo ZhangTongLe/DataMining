@@ -49,10 +49,16 @@ class Node(object):
         self.child   = np.array([],dtype = Node)
         self.Ci      = None 
         self.Ci_count= None
+        self.kind    = None
     def add_child(self,child,kind):
         child.kind  = kind
         self.child    = np.insert(self.child , len(self.child),child)
-       
+    def init(self):
+        self.col     = None
+        self.child   = np.array([],dtype = Node)
+        self.Ci      = None 
+        self.Ci_count= None
+        self.kind    = None
 def _info_D(L):
     '''     
        计算数据集信息熵  
@@ -339,7 +345,7 @@ def _build_tree(D,Len_D ,D_col ,L, criterion, min_split, multiple_branch):
                 N.Ci         = i 
         return N
         
-      # 一个节点下的样本属性太少  
+      # 节点下的样本属性太少  
     if D.shape[0] < min_split:
         #  加入一个树叶到节点N，标记D为多数类
       max_ci_count = 0
@@ -416,9 +422,10 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
     if node.col == None:
         ax.plot(width[depth-1]*width_offset,depth*depth_offset, 'bo')
         str1 = '\n%s '   % (ci_name[node.Ci])
-        for kind_item in node.kind:
-            str_kind_item = "%i " %kind_item
-            str1=str_kind_item+str1
+        if node.kind != None : 
+            for kind_item in node.kind:
+                str_kind_item = "%i " %kind_item
+                str1=str_kind_item+str1
         plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
             ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
@@ -427,10 +434,11 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
         ax.plot(width[depth-1]*width_offset,depth*depth_offset,  'ro')
         str1 =''
         if hasattr(node,'kind') :
-            str1 = '\n%s'   %  (list_name[node.col])         
-            for kind_item in node.kind:
-                str_kind_item = "%i " %kind_item
-                str1=str_kind_item+str1
+            str1 = '\n%s'   %  (list_name[node.col]) 
+            if node.kind != None :       
+                for kind_item in node.kind:
+                    str_kind_item = "%i " %kind_item
+                    str1=str_kind_item+str1
         else:
             str1 = '%s '   %  (list_name[node.col] ) 
         plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
@@ -473,11 +481,13 @@ def _apply_tree(tree, features):
     features_list = list(features)
     features_col_value = features[tree.col]
     for child in tree.child :
-        if([features_col_value] in child.kind ):
-            return _apply_tree(child,features)
+        if child.kind != None:
+            if([features_col_value] in child.kind ):
+                return _apply_tree(child,features)
 
       #  一个数据类型错误的预测数据元组，该列值在训练元组中相应的列上不存在
-    assert False
+    print "一个数据类型错误的预测数据元组，该列值在训练元组中相应的列上不存在"
+    return None
      
 def _apply_error(node ,D, L):  
     '''
@@ -573,85 +583,9 @@ class tree_model():
            
            return (e_T_+omega_T)/float(N_t)
        
-     def PEP(self,D, L, penalty_term = 0.5):
-           '''
-                  悲观误差剪枝 --- Pessimistic Error Pruning(PEP，悲观剪枝）
-                Quinlan提出的PEP剪枝算法是通过比较剪枝前和剪枝后的错分样本数来判断是否剪枝的它在ID3系统中获得实现。PEP既采用训练集来生成决策树又用它来进行剪枝,
-              不需要独立的剪枝集。这样,由于决策树生成和剪枝都使用训练集,所以产生的错分样本率r(t)是有偏差的,即偏向于训练集,无法得到最优的剪枝树。对此Quinlan引入了一
-              个基于二项分布的连续校正公式来对在训练集中产生的错分样本率r(t)进行校正,经过校正后可以得到一个较为合理的错分样本率。
-                  假设对于训练集的错分样本率为r(t),计算公式为r(t)=e(t)/n(t);
-                  连续校正后的错分样本率为r′(t),计算公式为r′(t)=[e(t)+1/2]/n(t)。
-                  为简单起见,在下面计算过程中采用错分样本数而不用错分样本率来说明问题。经过连续校正后,对节点t进行剪枝产生的错分样本数为e′(t)=[e(t)+1/2];未剪
-              枝的错分样本数变为e′(Tt)=∑[e(s)+1/2],s∈{Tt子树的所有叶节点};进一步,引入子树Tt的服从二项分布的标准错误
-            SE(e′(Tt)),SE(e′(Tt))=[e′(Tt)・(n(t)-e′(Tt))/n(t)]^(1/2)。
-                PEP算法采用自顶向下的顺序遍历完全决策树Tmax,对于每个内部节点t逐一比较e′(t)和e′(Tt)+SE(e′(Tt))的大小,当满足条件e′(t)<=e′(Tt)+SE(e′(Tt))时,
-              就进行剪枝,剪掉以t为根节点的子树Tt而代之为一个叶节点,该叶节点所标识的类别由“大多数原则”确定。
-               PEP算法是唯一使用Top-Down剪枝策略，这种策略会导致与先剪枝出现同样的问题，将该结点的某子节点不需要被剪枝时被剪掉；另外PEP方法会有剪枝失败的情况出现。
-              虽然PEP方法存在一些局限性，但是在实际应用中表现出了较高的精度,。两外PEP方法不需要分离训练集合和验证机和，对于数据量比较少的情况比较有利。再者其剪枝策略比
-              其它方法相比效率更高，速度更快。因为在剪枝过程中，树中的每颗子树最多需要访问一次，在最坏的情况下，它的计算时间复杂度也只和非剪枝树的非叶子节点数目成线性关系。
-          
-               Tmax:由决策树生成算法生成的未剪枝的完全决策树;
-               Tt:以内部节点t为根的一棵子树;
-               n(t):到达节点t的所有样本数目;
-               ni(t):到达节点t且属于第i类的样本数目;
-               e(t):到达节点t但不属于节点t所标识的类别的样本数目;
-               r(t):错分样本率,其值为e(t)/n(t)。
-               
-                D                 【二维数组】 存放记录    
-                L                 【一维数组】 存放类标志Ci（i=0..n）   
-                penalty_term      【经验性的惩罚因子】 
-            '''   
-           
-               # 自顶向下的顺序遍历完全决策树Tmax,对于每个内部节点t逐一比较, 如果剪枝剪掉了，就到下一个内部节点，否则继续。
-           def recursion(T , D, L,penalty_term):
-              assert len(D) == len(L)
-              if(T.col == None) :
-                  return              
-
-                   # 决策树叶子节点个数
-              def recursion1(T , leaf_count):
-                  if(T.col == None) :
-                      leaf_count[0] = leaf_count[0] + 1
-                  for child in T.child:
-                      recursion(child,leaf_count)
-              leaf_count=[0]            
-              recursion1(T,leaf_count)
-                  # 罚项总和
-              omega_T  = leaf_count[0]*penalty_term
-                  #  未剪枝的错分样本数变为 e′(Tt)=∑[e(s)+1/2],s∈{Tt子树的所有叶节点};
-              apply_error_rate , e_T_t = _apply_error(self.tree ,D, L)
-              e_T_t = e_T_t + omega_T               
-                  #  训练记录个数
-              n_t = len(L)  
-              
-              # e'(Tt)的标准差，由于误差近似看成是二项式分布     
-              # SE(e′(Tt)),SE(e′(Tt))=[e′(Tt)・(n(t)-e′(Tt))/n(t)]^1/2
-              SE_e_T_t = sp.pow(e_T_t*(n_t-e_T_t)/float(n_t),0.5)
-
-                   # 该叶节点所标识的类别的“大多数原则”
-              def recursion2(T , majority_classc):
-                  if(T.col != None) :
-                      return
-                  append (majority_classc,T.kind)
-                  for child in T.child:
-                      recursion(child,leaf_count)
-              majority_classc=[]            
-              recursion2(T,majority_classc)
-              majority_classc = Counter(majority_classc)
-              
-                   #当满足条件e′(t)<=e′(Tt)+SE(e′(Tt))时,就进行剪枝,剪掉以t为根节点的子树Tt而代之为一个叶节点,该叶节点所标识的类别由“大多数原则”确定。
-              if e_T_t <= 
-                  
-              for child in node.child:
-                recursion(child)
-
-           recursion(self.tree)
-           pass 
-               
      def MDL(self,D,L):      
         '''
-              最小描述长度原则评估泛化误差 --- 该评估结合了模型复杂度（叶子节点的个数、中间节点个数，错误训练个数）
-               D                 【二维数组】 存放记录    
+              最小描述长度原则评估泛化误差 --- 该评估结合了模型复杂度（叶子节点的个数、中间节点个数，错误        【二维数组】 存放记录    
                L                 【一维数组】 存放类标志Ci（i=0..n）   
        '''        
            # 决策书叶子节点个数和属性节点个数
@@ -677,7 +611,99 @@ class tree_model():
            # 在训练集上分类错误编码开销
         Cost_data_tree = sp.log2(N_t)*e_T_
         return    Cost_tree+Cost_data_tree
-     
+      
+     def PEP(self,D, L, penalty_term = 0.025):
+           '''
+                  悲观误差剪枝 --- Pessimistic Error Pruning(PEP，悲观剪枝）
+                PEP剪枝算法是在C4.5决策树算法中提出的， 把一颗子树（具有多个叶子节点）用一个叶子节点来替代，它不需要一个单独的测试数据集。
+                PEP算法首先确定这个叶子的经验错误率（empirical）为（E+0.5）/N，0.5为一个调整系数。对于一颗拥有L个叶子的子树，则子树的
+                  错误数和实例数都是就应该是叶子的错误数和实例数求和的结果，则子树的错误率为e，这个e后面会用到
+                  (∑E +0.5*L)∑N (子树的错误率)
+                  然后用一个叶子节点替代子树，该新叶子节点的类别为原来子树节点的最优叶子节点所决定，J为这个替代的叶子节点的错判个数，但是也
+                  要加上0.5，即J+0.5。最终是否应该替换的标准为：
+                E(subtree_err_count) - var(subtree_err_count) > E(leaf_err_count)
+                       被替换子树的错误数   -      标准差         >   新叶子错误数
+                  个案例目的是看看T4为根的整个这颗子树是不是可以被剪掉。树中每个节点有两个数字，左边的代表正确，右边代表错误。比如T4这个节点，
+                  说明覆盖了训练集的16条数据，其中9条分类正确，7条分类错误。
+                  我们先来计算替换标准不等式中，关于子树的部分：
+                  子树有3个叶子节点，分别为T7、T8、T9，因此L=3
+                  子树中一共有16条数据（根据刚才算法说明把三个叶子相加），所以N=16子树一共有7条错误判断，所以E=7，
+                  那么根据e的公式e=（7+0.5×3）/ 16 = 8.5 /16 = 0.53
+                  根据二项分布的标准差公式，标准差为（16×0.53×（1-0.53））^0.5 = 2.00
+                  子树的错误数为“所有叶子实际错误数+0.5调整值” = 7 + 0.5×3 = 8.5
+                  把子树剪枝后，只剩下T4，T4的错误数为7+0.5=7.5
+                  这样， 8.5-2 < 7.5， 因此不满足剪枝标准，不能用T4替换整个子树。
+                  
+                                 
+                                      T4
+                                    9               7
+                                   /                 \
+                            T4                T7
+                             3       4           6         3
+                          /          \                     
+                    T8           T9
+                   3       4        0    2
+ 
+                D                 【二维数组】 存放记录    
+                L                 【一维数组】 存放类标志Ci（i=0..n）   
+                penalty_term      【经验性的惩罚因子】 
+            '''   
+           
+               # 自顶向下的顺序遍历完全决策树Tmax,对于每个内部节点t逐一比较, 如果剪枝剪掉了，就到下一个内部节点，否则继续。
+           def recursion(T , D, L,penalty_term):
+              assert len(D) == len(L)
+              if(T.col != None) :             
+                        # 决策树叶子节点个数
+                 def recursion1(T , leaf_count):
+                    if(T.col == None) :
+                        leaf_count[0] = leaf_count[0] + 1
+                    for child in T.child:
+                        recursion1(child,leaf_count)
+                 leaf_count=[0]            
+                 recursion1(T,leaf_count)
+                       # 罚项总和
+                 omega_T  = leaf_count[0]*penalty_term
+                       # 未剪枝的错分样本数
+                 apply_error_rate , E = _apply_error(T ,D, L)            
+                       # 训练记录个数
+                 n_t = len(L)       
+                          
+                       # 子树的错误率为e
+                 e = (E+penalty_term*leaf_count[0])/float(len(L)) 
+                       # 根据二项分布的标准差公式，标准差为
+                 var_subtree_err_count = np.power(len(L)*e*(1-e),0.5)
+   
+                       # 子树的错误数为“所有叶子实际错误数+0.5调整值 * 叶子数
+                 E_subtree_err_count = E+leaf_count[0]*penalty_term
+                 
+                       # 新叶子错误数
+                 E_leaf_err_count = E+penalty_term
+   
+                 if  E_subtree_err_count - var_subtree_err_count > E_leaf_err_count:             
+                            # 该叶节点所标识的类别的“大多数原则”
+                     def recursion2(T , majority_classc):
+                         if(T.col == None):
+                             majority_classc.append (T.Ci)
+                         for child in T.child:
+                             recursion2(child,majority_classc)
+                     majority_classc=[]            
+                     recursion2(T,majority_classc)
+                     majority_classc = Counter(majority_classc)
+                     majority_classc = max(majority_classc, key=majority_classc.get)                          
+                     T.init()
+                     T.Ci = majority_classc
+                     return
+              for child in T.child:
+                  if child.col == None :
+                      continue 
+                  cur_col_values = D[:,T.col]
+                  #  value对应的key 
+                  keys= [key for key,value in enumerate(cur_col_values) if value in child.kind]
+                  Dj= D[keys]
+                  Lj= L[keys]
+                  recursion(child,Dj, Lj, penalty_term)
+           recursion(self.tree,D, L, penalty_term)
+               
      def tree_w_d(self,tree):
         '''
         获得生成决策树的宽度和深度
