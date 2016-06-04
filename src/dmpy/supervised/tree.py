@@ -428,7 +428,7 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
                 str1=str_kind_item+str1
         plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
-            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
+            ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.3)
       # 打印分裂节点
     else :  
         ax.plot(width[depth-1]*width_offset,depth*depth_offset,  'ro')
@@ -443,7 +443,7 @@ def _print_tree(node ,ax,width_offset,depth_offset,list_name,ci_name,depth,width
             str1 = '%s '   %  (list_name[node.col] ) 
         plt.annotate(str1, xy = (width[depth-1]*width_offset+5,depth*depth_offset), fontsize=8) 
         if(location != [0,0] ):
-          ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.1)
+          ax.plot([width[depth-1]*width_offset , location[1]*width_offset]  , [depth*depth_offset,location[0]*depth_offset], 'b-',linewidth=.3)
        
     location = [depth ,width[depth-1] ]
     for child in node.child :
