@@ -8,6 +8,7 @@ import dmpy.supervised.tree
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import dmpy.supervised.naive_bayes as nb
 
 
 def load(force_contiguous=True):
@@ -24,7 +25,7 @@ if __name__ == '__main__' or __name__ == 'test_tree':
     print __name__
     
     
-
+    '''
     X = np.random.randint(5, size=(6, 100))
     y = np.array([1, 2, 3, 4, 5, 6])
     from sklearn.naive_bayes import MultinomialNB
@@ -32,10 +33,15 @@ if __name__ == '__main__' or __name__ == 'test_tree':
     clf.fit(X, y)
     A = [3, 3, 3, 7, 4, 3, 0, 3, 1, 2, 0, 2, 4, 2, 0, 3, 1, 3, 4, 2, 3, 0,1, 8, 4, 2, 1, 0, 1, 4, 1, 2, 5, 3, 2, 2, 4, 3, 1, 2, 4, 2, 1, 0,2, 3, 0, 4, 2, 4, 43, 4, 4, 3, 2, 4, 3, 33,34, 2, 1,32, 2, 3, 3, 3,4, 31, 0, 3, 4, 44, 1, 2, 1, 40, 2, 3, 4, 4, 2, 0, 1, 4, 24, 3, 1, 4,2, 4, 34, 2, 2, 1, 3, 2, 4, 0, 50, 2]
     print(clf.predict(A))
+    '''
     
     
      # 从文件中读取训练数据
     D, L = load()
+    
+     # 朴素贝叶斯 
+    NB = dmpy.supervised.naive_bayes.naive_bayes_learner()
+    NB.train_nb(D,L)
     
      # 随机生成训练数据
     #D = np.random.randint(5, size=(100, 20)) 
