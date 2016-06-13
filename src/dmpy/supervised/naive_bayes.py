@@ -17,12 +17,44 @@ def _P_Ci_(L):
     kind_of_cis_count = Counter(L.tolist())
     kind_of_ci_count_sum = sum([ci_count[1]for ci_count in kind_of_cis_count.items()])
     
+     #  每个类的先验概率P（Ci）【dict】
+    P_of_cis = kind_of_cis_count 
+    
     # class下有多少种类ci【list】
     kind_of_cis= kind_of_cis_count.keys()
     for kind_of_ci in kind_of_cis:               
-        info_D = info_D  + (-1)*(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)*sp.log2(kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)))
-    return info_D
-    pass
+        P_of_cis[kind_of_ci] = kind_of_cis_count[kind_of_ci]/float(kind_of_ci_count_sum)
+    return P_of_cis
+
+def _P_X_Ci(D,L,X,Ci,alpha):
+    '''
+    计算条件Ci下X的后验概率P(X|Ci)
+    '''
+    P_X_Ci = 1.
+    for col,X_value in enumerate(X):
+           # 从希望分类的元组中，按顺序从D中提取相应列并且列值等于元组元素的key
+        cur_col = D[:,col]
+        key_of_cur_col_equal_value = [key for key,value in enumerate(cur_col) if value == X_value]           
+
+        # (Laplace/Lidstone)平滑参数
+        Laplace = len(set(cur_col))*alpha
+           
+           # 与提取的D中key想对应的L
+        L_koccev = L[key_of_cur_col_equal_value] 
+          
+        # L_koccev中与Ci相等的个数
+        L_Ci_of_koccev  =  Counter(L_koccev)
+        L_Ci_of_koccev  =  L_Ci_of_koccev[Ci]+alpha
+        
+        # L中与Ci相等的个数
+        L_Ci  =  Counter(L)
+        L_Ci  =  L_Ci[Ci] + Laplace
+        
+
+        
+        P_Xi_Ci = float(L_Ci_of_koccev)/L_Ci
+        P_X_Ci = P_X_Ci * P_Xi_Ci
+    return P_X_Ci
 
 class naive_bayes_learner(object):
     """
@@ -97,11 +129,29 @@ class naive_bayes_learner(object):
         self.D = D
         self.L = L
         
-        _,col =D.shape
-        assert len(L) == col
+        row,_ =self.D.shape
+        assert len(L) == row
            
     def predict(self, X):
-        _P_Ci_(self.L)
+        assert len(X.tolist()) == self.D.shape[1]
         
+           # 每个类的先验概率P（Ci）
+        P_of_cis = _P_Ci_(self.L)
+        
+        # class下有多少种类ci【list】
+        kind_of_cis= P_of_cis.keys()     
+           
+           # 需要最大化P(X|Ci)
+        P_X_Cis={}       
+        
+        #P(X|Ci)*P（Ci）
+        P_X_Cis_multi_kind_of_cis={}
+        
+        for kind_of_ci in kind_of_cis:               
+            P_X_Cis[kind_of_ci] = _P_X_Ci(self.D,self.L,X,kind_of_ci,self.alpha)
+            P_X_Cis_multi_kind_of_cis[kind_of_ci] = P_X_Cis[kind_of_ci]*P_of_cis[kind_of_ci]
+            
+        max_P_Ci_X= max(P_X_Cis_multi_kind_of_cis, key=P_X_Cis_multi_kind_of_cis.get)    
+        return max_P_Ci_X
         
 
