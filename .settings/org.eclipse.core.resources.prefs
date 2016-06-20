@@ -1,2 +1,5 @@
+#Sun Jun 12 14:47:02 CST 2016
 eclipse.preferences.version=1
+encoding//src/dmpy/supervised/naive_bayes.py=utf-8
 encoding//src/dmpy/supervised/tree.py=utf-8
+encoding//src/test.py=utf-8
