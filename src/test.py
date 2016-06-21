@@ -25,12 +25,11 @@ def load(force_contiguous=True):
     return D,L
 
 
-
-def print_Livermore(datafile,start_date,end_date,key_value) :
+def print_Livermore(datafile,start_date,end_date,key_value,second_key_value) :
     
-    _winedatafile = datafile
+    datafile111 = os.path.dirname(__file__)+'/'+datafile+'.csv'
+    _winedatafile = datafile111
     data1  = np.array([list(map(float,line.split(','))) for line in open(_winedatafile)])
-    rows,cols = data1.shape
     D = data1[:,0]
     D = D.astype(int)
     D = D.tolist()
@@ -48,8 +47,8 @@ def print_Livermore(datafile,start_date,end_date,key_value) :
     sub   = 0
     for i in D_L:
         if end_date == 0 :
-            if i[0] == start_date :
-                s_sub = sub
+            if i[0] <= start_date :
+                s_sub = sub+1
                 e_sub = 0
                 break
         else : 
@@ -62,6 +61,7 @@ def print_Livermore(datafile,start_date,end_date,key_value) :
         sub = sub+1                 
     D_L = D_L[e_sub:s_sub]
  
+   
     D = D_L[:,0]
     for i in D:
         str = repr(i)
@@ -72,43 +72,249 @@ def print_Livermore(datafile,start_date,end_date,key_value) :
     D = dates
     L = D_L[:,1]
 
-    
+    table  = []     
+    c_1_v     = []# 次级上升
+    c_2_v     = []# 自然上升
+    c_3_v     = []# 上升趋势
+    c_4_v     = []# 下降趋势
+    c_5_v     = []# 自然下降
+    c_6_v     = []# 次级下降
+    c_7_v     = []
+    c_1_d     = []
+    c_2_d     = []
+    c_3_d     = []
+    c_4_d     = []
+    c_5_d     = []
+    c_6_d     = []
+    c_7_d     = []
+    prv_r     = None 
+    prv_col   = None
+    cur_col   = None
+    for cur_r in range(0, D_L.__len__())[::-1]:
+        sub = cur_r
+        cur_r = D_L[cur_r]
+        if prv_r is None :
+            prv_r = cur_r 
+            continue
+        
+          
+        if   cur_r[1] > prv_r[1]: # 上升趋势
+            if len(c_4_v) >0 :
+               if(cur_r[1]- key_value <  min(c_4_v)): # 是自然上升么？
+                   cur_col = 4                        # 不是 是下降
+               else:
+                   cur_col = 2                        # 是 是自然上升
+            elif len(c_5_v) >0 :
+               if(cur_r[1]- key_value <  min(c_5_v)): # 是自然上升么？
+                   cur_col = 5                        # 不是 是下降
+               else:
+                   cur_col = 2                        # 是 是自然上升
+            elif  len(c_2_v) >0 :
+                   for i_sub in range(0, table.__len__())[::-1]:
+                      i=table[i_sub]
+                      if i[0] == 2 or i[0] == 3 :
+                        if(cur_r[1]+ second_key_value> max(i[2])):
+                             cur_col = 3
+                             break
+                   if i_sub == 0:
+                       cur_col = 2  
+            else:
+                   cur_col = 3                        # 上升趋势
+        elif cur_r[1] < prv_r[1]: # 下降趋势
+            if len(c_3_v) >0 :
+               if(cur_r[1]+ key_value >  max(c_3_v)): # 是自然下降么？
+                   cur_col = 3                        # 不是 是上升
+               else:
+                   cur_col = 5                        # 是 是自然下降
+            elif  len(c_2_v) >0 :
+               if(cur_r[1]+ key_value >  max(c_2_v)): # 是自然下降么？
+                   cur_col = 2                        # 不是 是上升
+               else:
+                   cur_col = 5                        # 是 是自然下降
+            elif  len(c_5_v) >0 :
+                   for i_sub in range(0, table.__len__())[::-1]:
+                      i=table[i_sub]
+                      if i[0] == 4 or i[0] == 5 :
+                        if(cur_r[1] - second_key_value< min(i[2])):
+                             cur_col = 4
+                             break
+                   if i_sub == 0:
+                      cur_col = 5  
+            else:
+                   cur_col = 4                        # 下降趋势
+            
+        if cur_col != prv_col or sub == 0:
+            if prv_col == 3 :   
+                if cur_col == 4 :
+                    c_4_v  = c_4_v + [c_3_v[len(c_3_v)-1]]  #保证曲线完整
+                    c_4_d  = c_4_d + [c_3_d[len(c_3_d)-1]]    
+                if cur_col == 5 :
+                    c_5_v  = c_5_v + [c_3_v[len(c_3_v)-1]]
+                    c_5_d  = c_5_d + [c_3_d[len(c_3_d)-1]]                                                     
+                t_r =[3,c_3_d,c_3_v]
+                table = table + [t_r]
+                c_3_v  = []
+                c_3_d  = []
+            elif prv_col == 4 :
+                if cur_col == 3 :
+                    c_3_v  = c_3_v + [c_4_v[len(c_4_v)-1]]
+                    c_3_d  = c_3_d + [c_4_d[len(c_4_d)-1]]    
+                if cur_col == 2 :
+                    c_2_v  = c_2_v + [c_4_v[len(c_4_v)-1]]
+                    c_2_d  = c_2_d + [c_4_d[len(c_4_d)-1]]    
+                t_r =[4,c_4_d,c_4_v]
+                table = table + [t_r]
+                c_4_v  = []
+                c_4_d  = []
+            elif prv_col == 2 :
+                if cur_col == 4 :
+                    c_4_v  = c_4_v + [c_2_v[len(c_2_v)-1]]
+                    c_4_d  = c_4_d + [c_2_d[len(c_2_d)-1]]    
+                if cur_col == 5 :
+                    c_5_v  = c_5_v + [c_2_v[len(c_2_v)-1]]
+                    c_5_d  = c_5_d + [c_2_d[len(c_2_d)-1]]
+                if cur_col == 3 :
+                    c_3_v  = c_3_v + [c_2_v[len(c_2_v)-1]]
+                    c_3_d  = c_3_d + [c_2_d[len(c_2_d)-1]]
+                t_r =[2,c_2_d,c_2_v]
+                table = table + [t_r]
+                c_2_v  = []
+                c_2_d  = []
+            elif prv_col == 5 :
+                if cur_col == 3 :
+                    c_3_v  = c_3_v + [c_5_v[len(c_5_v)-1]]
+                    c_3_d  = c_3_d + [c_5_d[len(c_5_d)-1]]    
+                if cur_col == 2 :
+                    c_2_v  = c_2_v + [c_5_v[len(c_5_v)-1]]
+                    c_2_d  = c_2_d + [c_5_d[len(c_5_d)-1]]   
+                if cur_col == 4 :
+                    c_4_v  = c_4_v + [c_5_v[len(c_5_v)-1]]
+                    c_4_d  = c_4_d + [c_5_d[len(c_5_d)-1]]    
+                t_r =[5,c_5_d,c_5_v]
+                table = table + [t_r]
+                c_5_v  = []
+                c_5_d  = []
+        
+        str = repr(cur_r[0])
+        year  = int(str[0])*1000+int(str[1])*100+int(str[2])*10+ int(str[3])
+        month = int(str[4])*10+int(str[5])
+        day   = int(str[6])*10+int(str[7])
+        date  = datetime(year, month, day, 0, 0, 0,0)
+        
+        if cur_col   == 3 :
+            c_3_v  = c_3_v+[cur_r[1]]
+            c_3_d  = c_3_d+[sub]
+        elif cur_col == 4 :
+            c_4_v  = c_4_v+[cur_r[1]]
+            c_4_d  = c_4_d+[sub]
+        elif cur_col == 2 :
+            c_2_v  = c_2_v+[cur_r[1]]
+            c_2_d  = c_2_d+[sub]
+        elif cur_col == 5 :
+            c_5_v  = c_5_v+[cur_r[1]]
+            c_5_d  = c_5_d+[sub]
+           
+        prv_col  = cur_col
+        prv_r    = cur_r
+                
      # 画布
-    fig = plt.figure(figsize=(39,13))       
+    fig = plt.figure(figsize=(39,13),facecolor=(1, 1, 0))       
       # 将画布分割成1行1列，图像画在从左到右从上到下的第1块
-    ax = fig.add_subplot(111)
+    ax = fig.add_subplot(111,axisbg='w')
       # 坐标
     ax.grid()
     
-    D_max = max(D)
-    D_min = min(D)
-    L_max = max(L)
-    L_min = min(L)
     
+    timespan = timedelta(days=1)
+    D_max = max(D)+timespan
+    D_min = min(D)-timespan
+    L_max = max(L)+10
+    L_min = min(L)-10
     
-    autodates = AutoDateLocator()  
-    yearsFmt = DateFormatter('%Y-%m-%d')  
-    fig.autofmt_xdate()        #设置x轴时间外观  
-    ax.xaxis.set_major_locator(autodates)       #设置时间间隔  
-    ax.xaxis.set_major_formatter(yearsFmt)      #设置时间显示格式  
-
-
-
-    l=[D_min,D_max,L_min,L_max]  
+     
+    l=[len(D),0,L_min,L_max]  
     plt.axis(l)
+
+     # 1次级上升
+     # 2 自然上升
+     # 3上升趋势
+     # 4下降趋势
+     # 5自然下降
+     # 6次级下降
+    for i in table :
+        if   i[0] == 3 :
+            ax.plot(i[1],i[2],'r-')
+            y = max(i[2])
+            x = i[1][i[2].index(y)]
+            time = datetime.strftime(D[x], '%m%d')
+            str1 = '%s\n%d'% (time,y) 
+            plt.annotate(str1, xy = (x,y), fontsize=12,  color="red") 
+        elif i[0] == 4 :
+            ax.plot(i[1],i[2],'g-')
+            y = min(i[2])
+            x = i[1][i[2].index(y)]
+            time = datetime.strftime(D[x], '%m%d')
+            str1 = '%s\n%d'% (time,y) 
+            plt.annotate(str1, xy = (x,y), fontsize=12,  color="green") 
+        elif i[0] == 2 :
+            ax.plot(i[1],i[2],'b-')
+            y = max(i[2])
+            x = i[1][i[2].index(y)]
+            time = datetime.strftime(D[x], '%m%d')
+            str1 = '%s\n%d'% (time,y) 
+            plt.annotate(str1, xy = (x,y), fontsize=12,  color="blue") 
+        elif i[0] == 5 :
+            ax.plot(i[1],i[2],'c-')
+            y = min(i[2])
+            x = i[1][i[2].index(y)]
+            time = datetime.strftime(D[x], '%m%d')
+            str1 = '%s\n%d'% (time,y) 
+            plt.annotate(str1, xy = (x,y), fontsize=12,  color='c') 
     
-    
-    ax.plot(D,L.tolist())
       
      # 保存成图片
     plt.show()  
-    plt.savefig('/root/workspace/DMPY/src/dd.jpg', dpi=240)
+    time ="_%i_to_%i"%(start_date,end_date)
+    datafile111 = os.path.dirname(__file__)+'/'+datafile+time+'.png'
+    plt.savefig(datafile111, dpi=240,facecolor=(1, 1, 1))
 
 if __name__ == '__main__' or __name__ == 'test_tree':    
-    print __name__
-    print_Livermore(os.path.dirname(__file__)+'/BLC.csv',20160304,0,6) 
+    print_Livermore('BLC',20140306,20140613,25,10) 
     #X = np.random.randint(5, size=(6, 100))
     X = np.array([[0, 2, 3, 3, 0, 3, 2, 3, 4, 3, 0, 3, 2, 1, 3, 3, 4, 0, 2, 3, 0, 2,2, 3, 4, 4, 2, 1, 4, 0, 0, 2, 3, 4, 3, 3, 4, 4, 2, 3, 3, 0, 3, 2,2, 2, 4, 4, 3, 0, 1, 3, 4, 0, 0, 4, 1, 3, 3, 2, 3, 0, 2, 4, 3, 0,3, 0, 3, 1, 4, 1, 3, 2, 2, 1, 1, 0, 0, 2, 3, 1, 1, 4, 1, 3, 2, 3,2, 1, 1, 3, 0, 4, 0, 3, 1, 0, 0, 0],[2, 2, 2, 2, 0, 4, 3, 2, 3, 3, 1, 2, 2, 1, 1, 4, 0, 1, 3, 4, 0, 1,2, 0, 0, 0, 0, 3, 3, 3, 3, 3, 2, 4, 1, 3, 2, 2, 0, 3, 1, 1, 0, 1,2, 3, 0, 2, 0, 4, 3, 2, 3, 4, 2, 3, 3, 3, 4, 2, 0, 0, 4, 3, 2, 1,3, 1, 2, 4, 3, 2, 1, 2, 2, 4, 0, 1, 1, 4, 0, 1, 2, 3, 4, 4, 3, 3,2, 4, 3, 3, 0, 4, 1, 1, 0, 1, 0, 3],[1, 1, 3, 4, 3, 1, 1, 1, 3, 2, 0, 2, 3, 0, 0, 2, 2, 2, 0, 3, 4, 2,0, 1, 4, 3, 3, 4, 2, 4, 1, 0, 1, 3, 4, 2, 1, 0, 3, 0, 2, 3, 3, 4,3, 4, 4, 1, 0, 1, 2, 2, 1, 4, 4, 0, 3, 1, 2, 1, 2, 3, 2, 2, 0, 2,2, 1, 1, 3, 1, 3, 0, 4, 0, 3, 4, 0, 4, 2, 4, 2, 3, 1, 1, 4, 1, 0,3, 1, 1, 2, 0, 0, 0, 1, 2, 3, 4, 1],[3, 4, 3, 2, 0, 4, 0, 0, 2, 3, 1, 4, 0, 1, 0, 0, 3, 3, 0, 1, 1, 4,0, 2, 4, 2, 1, 3, 1, 1, 4, 0, 4, 0, 1, 2, 1, 3, 0, 2, 2, 1, 1, 1,3, 2, 1, 4, 1, 4, 2, 0, 3, 2, 1, 1, 0, 0, 3, 3, 0, 2, 2, 0, 4, 2,1, 3, 0, 2, 3, 3, 3, 0, 0, 1, 0, 1, 2, 1, 4, 3, 1, 0, 3, 3, 2, 1,0, 0, 2, 0, 1, 2, 4, 4, 0, 0, 1, 1],[3, 1, 4, 0, 0, 0, 3, 4, 3, 0, 1, 4, 2, 1, 4, 0, 1, 1, 2, 1, 3, 1,3, 4, 1, 0, 0, 1, 3, 1, 0, 1, 0, 1, 3, 0, 2, 4, 3, 0, 0, 0, 2, 3,4, 0, 4, 2, 3, 0, 3, 2, 1, 2, 1, 1, 3, 3, 3, 3, 3, 1, 2, 2, 0, 3,1, 0, 1, 2, 4, 1, 3, 3, 2, 3, 2, 1, 3, 1, 0, 1, 1, 3, 0, 4, 2, 0,1, 1, 1, 1, 3, 1, 4, 4, 1, 0, 4, 1],[1, 2, 2, 4, 3, 1, 3, 2, 2, 4, 0, 0, 1, 3, 4, 0, 4, 3, 3, 0, 2, 0,2, 1, 4, 4, 3, 2, 0, 3, 1, 1, 3, 0, 4, 3, 4, 0, 3, 1, 1, 0, 3, 0,0, 0, 3, 1, 3, 2, 0, 1, 4, 2, 3, 4, 0, 1, 2, 1, 3, 2, 3, 1, 3, 2,2, 0, 1, 2, 3, 1, 3, 3, 0, 1, 4, 0, 0, 2, 1, 3, 3, 4, 1, 1, 2, 4,3, 1, 1, 1, 2, 1, 4, 2, 0, 2, 2, 1]])
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     y = np.array([1, 2, 3, 4, 5, 6])
     A =  [11, 23, 35, 26, 13, 0, 3, 2, 22, 4, 0, 0, 1, 3, 42, 0, 2, 3, 0, 2, 2, 3,4, 4, 2, 1, 4, 0, 0, 2, 3, 4, 3, 3, 4, 4, 2, 3, 3, 36, 52,21, 23, 0,0, 0, 3, 1, 3, 2, 0, 2,4, 5, 1, 2, 3, 4, 2, 1, 3, 2, 3, 1, 3, 2,2, 0, 1, 2, 3, 1, 3, 3, 0, 1, 4, 0, 0, 1, 2, 3, 4, 5, 6, 7, 5, 6,2, 1, 1, 1, 2, 1, 4, 2, 0, 2, 2, 1]
     '''
